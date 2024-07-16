@@ -1,39 +1,41 @@
-document.addEventListener('DOMContentLoaded', async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-        window.location.href = 'index.html';
-        return;
+const express = require('express');
+const router = express.Router();
+const Task = require('../models/Task');
+const authMiddleware = require('../middleware/auth');
+
+// Create a new task
+router.post('/', authMiddleware, async (req, res) => {
+    const { title, description, dueDate } = req.body;
+    const task = new Task({ title, description, dueDate, userId: req.userId });
+    await task.save();
+    res.status(201).send(task);
+});
+
+// Get all tasks for the logged-in user
+router.get('/', authMiddleware, async (req, res) => {
+    const tasks = await Task.find({ userId: req.userId });
+    res.send(tasks);
+});
+
+// Update a task
+router.put('/:id', authMiddleware, async (req, res) => {
+    const { id } = req.params;
+    const { title, description, dueDate } = req.body;
+    const task = await Task.findOneAndUpdate({ _id: id, userId: req.userId }, { title, description, dueDate }, { new: true });
+    if (!task) {
+        return res.status(404).send({ message: 'Task not found' });
     }
+    res.send(task);
+});
 
-    const tasksList = document.getElementById('tasks-list');
+// Delete a task
+router.delete('/:id', authMiddleware, async (req, res) => {
+    const { id } = req.params;
+    const task = await Task.findOneAndDelete({ _id: id, userId: req.userId });
+    if (!task) {
+        return res.status(404).send({ message: 'Task not found' });
+    }
+    res.send({ message: 'Task deleted' });
+});
 
-    const fetchTasks = async () => {
-        const res = await fetch('/api/tasks', {
-            headers: { 'Authorization': Bearer ${token} }
-        });
-        const tasks = await res.json();
-        tasksList.innerHTML = '';
-        tasks.forEach(task => {
-            const li = document.createElement('li');
-            li.textContent = ${task.title} - ${task.description} - ${task.dueDate};
-            tasksList.appendChild(li);
-        });
-    };
-    fetchTasks();
-
-    document.getElementById('task-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const title = document.getElementById('task-title').value;
-        const description = document.getElementById('task-description').value;
-        const dueDate = document.getElementById('task-due-date').value;
-        await fetch('/api/tasks', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': Bearer ${token}
-            },
-            body: JSON.stringify({ title, description, dueDate })
-        });
-        fetchTasks();
-    });
-})
+module.exports = router;
